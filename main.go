@@ -41,6 +41,15 @@ type Index struct {
 var gRows []Deal
 var IndexProvince map[string]Index
 
+type ResponseTypeUnit struct {
+	name string
+	key  int
+}
+
+type ResponseTypeAll struct {
+	results []ResponseTypeUnit
+}
+
 func unquote(val string) string {
 	str := strings.Trim(val, "\"")
 
@@ -139,27 +148,35 @@ func HandleCity(w http.ResponseWriter, r *http.Request) {
 	provinceIndex := atoi(vars["province"])
 	province := gRows[provinceIndex].City
 	citiesIndex := IndexProvince[province].childs
-	result := make(map[string]int)
+	res := ResponseTypeAll{make([]ResponseTypeUnit, len(citiesIndex))}
+	i := 0
 	for city, v := range citiesIndex {
-		result[city] = v.start
+		res.results[i] = ResponseTypeUnit{city, v.start}
+		i++
 	}
-	b, err := json.Marshal(result)
+	b, err := json.Marshal(res)
 	if err != nil {
 		log.Println(err)
 	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%s\n", b)
 }
 
 func HandleProvince(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "provinces, %d", len(IndexProvince))
-	result := make(map[string]int)
+	res := ResponseTypeAll{make([]ResponseTypeUnit, len(IndexProvince))}
+	i := 0
 	for prov, v := range IndexProvince {
-		result[prov] = v.start
+		res.results[i] = ResponseTypeUnit{prov, v.start}
+		i++
 	}
-	b, err := json.Marshal(result)
+	log.Printf("%s", res.results)
+	b, err := json.Marshal(res)
 	if err != nil {
 		log.Println(err)
 	}
+	log.Printf("%s", b)
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%s\n", b)
 }
 
@@ -170,13 +187,11 @@ func HandleDeals(w http.ResponseWriter, r *http.Request) {
 	indexProvince := IndexProvince[row.City]
 	indexCity := indexProvince.childs[row.Gu]
 
-	//for j := indexCity.start; j < indexCity.end; j++ {
-	//	fmt.Fprintf(w, "%s %s %s %d\n", gRows[j].City, gRows[j].Gu, gRows[j].Road, gRows[j].Price)
-	//}
 	b, err := json.Marshal(gRows[indexCity.start:indexCity.end])
 	if err != nil {
 		log.Panicln(err)
 	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
 	fmt.Fprintf(w, "%s", b)
 }
 
