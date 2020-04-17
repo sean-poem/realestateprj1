@@ -42,12 +42,12 @@ var gRows []Deal
 var IndexProvince map[string]Index
 
 type ResponseTypeUnit struct {
-	name string
-	key  int
+	Name string `json:"name"`
+	Key  int    `json:"key"`
 }
 
 type ResponseTypeAll struct {
-	results []ResponseTypeUnit
+	Result []ResponseTypeUnit `json:"result"`
 }
 
 func unquote(val string) string {
@@ -151,7 +151,7 @@ func HandleCity(w http.ResponseWriter, r *http.Request) {
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(citiesIndex))}
 	i := 0
 	for city, v := range citiesIndex {
-		res.results[i] = ResponseTypeUnit{city, v.start}
+		res.Result[i] = ResponseTypeUnit{city, v.start}
 		i++
 	}
 	b, err := json.Marshal(res)
@@ -167,17 +167,18 @@ func HandleProvince(w http.ResponseWriter, r *http.Request) {
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(IndexProvince))}
 	i := 0
 	for prov, v := range IndexProvince {
-		res.results[i] = ResponseTypeUnit{prov, v.start}
+		res.Result[i].Name = prov
+		res.Result[i].Key = v.start
 		i++
 	}
-	log.Printf("%s", res.results)
+	//log.Printf("%v", res.results)
 	b, err := json.Marshal(res)
 	if err != nil {
 		log.Println(err)
 	}
-	log.Printf("%s", b)
+	log.Printf("%s", string(b))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
-	fmt.Fprintf(w, "%s\n", b)
+	fmt.Fprintf(w, "%s\n", string(b))
 }
 
 func HandleDeals(w http.ResponseWriter, r *http.Request) {
