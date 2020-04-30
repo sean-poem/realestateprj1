@@ -68,6 +68,14 @@ func atoi(val string) int {
 	return intval
 }
 
+func decode(name string) string {
+	decoded, err := KoreanDecoder.String(name)
+	if err != nil {
+		log.Fatal(err)
+	}
+	return decoded
+}
+
 func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 	rows := make([]Deal, 944410)
 	index := make(map[string]Index)
@@ -108,9 +116,9 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 
 		rows[i] = Deal{
 			Idx:           i,
-			City:          city[0],
-			Gu:            city[1],
-			Complex:       complex,
+			City:          decode(city[0]),
+			Gu:            decode(city[1]),
+			Complex:       decode(complex),
 			AreaExclusive: areaExclusive,
 			Year:          uint8(year),
 			Month:         uint8(month),
@@ -118,24 +126,24 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 			Price:         uint16(price),
 			Floor:         int8(floor),
 			YearBuilt:     uint8(yearBuilt),
-			Road:          road,
+			Road:          decode(road),
 		}
-		if curIndex != city[0] {
+		if curIndex != decode(city[0]) {
 			if v, ok := index[curIndex]; ok {
 				index[curIndex] = Index{v.start, i, v.childs}
 			}
 			//log.Printf("curIndex: %s", curIndex)
-			curIndex = city[0]
+			curIndex = decode(city[0])
 			cindex := make(map[string]ChildIndex)
 			index[curIndex] = Index{i, -1, cindex}
 			curChildIndex = ""
 		}
-		if curChildIndex != city[1] {
+		if curChildIndex != decode(city[1]) {
 			parent := index[curIndex]
 			if v, ok := parent.childs[curChildIndex]; ok {
 				parent.childs[curChildIndex] = ChildIndex{v.start, i}
 			}
-			curChildIndex = city[1]
+			curChildIndex = decode(city[1])
 			parent.childs[curChildIndex] = ChildIndex{i, -1}
 		}
 		i++
@@ -154,12 +162,8 @@ func HandleCity(w http.ResponseWriter, r *http.Request) {
 	citiesIndex := IndexProvince[province].childs
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(citiesIndex))}
 	i := 0
-	var err error
 	for city, v := range citiesIndex {
-		city, err = KoreanDecoder.String(city)
-		if err != nil {
-			log.Fatal(err)
-		}
+
 		res.Result[i] = ResponseTypeUnit{city, v.start}
 		i++
 	}
@@ -175,12 +179,8 @@ func HandleProvince(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "provinces, %d", len(IndexProvince))
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(IndexProvince))}
 	i := 0
-	var err error
 	for prov, v := range IndexProvince {
-		res.Result[i].Name, err = KoreanDecoder.String(prov)
-		if err != nil {
-			log.Fatal(err)
-		}
+		res.Result[i].Name = prov
 		res.Result[i].Key = v.start
 		i++
 	}
