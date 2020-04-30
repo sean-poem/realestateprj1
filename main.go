@@ -10,6 +10,9 @@ import (
 	"strconv"
 	"strings"
 
+	"golang.org/x/text/encoding"
+	"golang.org/x/text/encoding/korean"
+
 	"github.com/gorilla/mux"
 )
 
@@ -40,6 +43,7 @@ type Index struct {
 
 var gRows []Deal
 var IndexProvince map[string]Index
+var KoreanDecoder *encoding.Decoder = korean.EUCKR.NewDecoder()
 
 type ResponseTypeUnit struct {
 	Name string `json:"name"`
@@ -150,7 +154,12 @@ func HandleCity(w http.ResponseWriter, r *http.Request) {
 	citiesIndex := IndexProvince[province].childs
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(citiesIndex))}
 	i := 0
+	var err error
 	for city, v := range citiesIndex {
+		city, err = KoreanDecoder.String(city)
+		if err != nil {
+			log.Fatal(err)
+		}
 		res.Result[i] = ResponseTypeUnit{city, v.start}
 		i++
 	}
@@ -166,8 +175,12 @@ func HandleProvince(w http.ResponseWriter, r *http.Request) {
 	//fmt.Fprintf(w, "provinces, %d", len(IndexProvince))
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(IndexProvince))}
 	i := 0
+	var err error
 	for prov, v := range IndexProvince {
-		res.Result[i].Name = prov
+		res.Result[i].Name, err = KoreanDecoder.String(prov)
+		if err != nil {
+			log.Fatal(err)
+		}
 		res.Result[i].Key = v.start
 		i++
 	}
@@ -209,6 +222,7 @@ func main() {
 	}
 	csvFile := os.Args[1]
 	gRows, IndexProvince, _ = ImportRows(csvFile)
+	KoreanDecoder = korean.EUCKR.NewDecoder()
 	r := mux.NewRouter()
 	r.HandleFunc("/provinces", HandleProvince)
 	r.HandleFunc("/cities/{province:[0-9]+}", HandleCity)
