@@ -23,12 +23,12 @@ type Deal struct {
 	Dong          string
 	Complex       string
 	AreaExclusive string
-	Year          uint8
-	Month         uint8
-	Date          uint8
-	Price         uint16
-	Floor         int8
-	YearBuilt     uint8
+	Year          int
+	Month         int
+	Date          int
+	Price         int
+	Floor         int
+	YearBuilt     int
 	Road          string
 }
 type ChildIndex struct {
@@ -46,7 +46,7 @@ var IndexProvince map[string]Index
 var KoreanDecoder *encoding.Decoder = korean.EUCKR.NewDecoder()
 
 type ResponseTypeUnit struct {
-	Name string `json:"name"`
+	Name string `json:"title"`
 	Key  int    `json:"key"`
 }
 
@@ -65,6 +65,7 @@ func atoi(val string) int {
 	if err != nil {
 		log.Fatal(err)
 	}
+
 	return intval
 }
 
@@ -88,7 +89,8 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 	scanner := bufio.NewScanner(f)
 	var city []string
 	var complex, areaExclusive, road string
-	var year, month, date, price, floor, yearBuilt int
+	var year, month int
+	var date, price, floor, yearBuilt int
 
 	i := 0
 
@@ -106,8 +108,8 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 		city = strings.Split(unquote(columns[0]), " ")
 		complex = unquote(columns[4])
 		areaExclusive = unquote(columns[5])
-		year = atoi(columns[6])
-		month = atoi(columns[6])
+		year = atoi(unquote(columns[6])[:4])
+		month = atoi(unquote(columns[6])[4:])
 		date = atoi(columns[7])
 		price = atoi(strings.ReplaceAll(columns[8], ",", ""))
 		floor = atoi(columns[9])
@@ -120,12 +122,12 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 			Gu:            decode(city[1]),
 			Complex:       decode(complex),
 			AreaExclusive: areaExclusive,
-			Year:          uint8(year),
-			Month:         uint8(month),
-			Date:          uint8(date),
-			Price:         uint16(price),
-			Floor:         int8(floor),
-			YearBuilt:     uint8(yearBuilt),
+			Year:          year,
+			Month:         month,
+			Date:          date,
+			Price:         price,
+			Floor:         floor,
+			YearBuilt:     yearBuilt,
 			Road:          decode(road),
 		}
 		if curIndex != decode(city[0]) {
