@@ -31,18 +31,23 @@ type Deal struct {
 	YearBuilt     int
 	Road          string
 }
-type ChildIndex struct {
+type ComplexIndex struct {
 	start int
 	end   int
 }
-type Index struct {
+type CityIndex struct {
+	start     int
+	end       int
+	complexes map[string]ComplexIndex
+}
+type ProvinceIndex struct {
 	start  int
 	end    int
-	childs map[string]ChildIndex
+	cities map[string]CityIndex
 }
 
 var gRows []Deal
-var IndexProvince map[string]Index
+var IndexProvince map[string]ProvinceIndex
 var KoreanDecoder *encoding.Decoder = korean.EUCKR.NewDecoder()
 
 type ResponseTypeUnit struct {
@@ -77,9 +82,9 @@ func decode(name string) string {
 	return decoded
 }
 
-func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
+func ImportRows(csvfile string) ([]Deal, map[string]ProvinceIndex, error) {
 	rows := make([]Deal, 944410)
-	index := make(map[string]Index)
+	index := make(map[string]ProvinceIndex)
 
 	f, err := os.Open(csvfile)
 	if nil != err {
@@ -99,8 +104,9 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 	}
 
 	i = 0
-	curIndex := ""      //province
-	curChildIndex := "" //city
+	curProvIndexKey := ""    //province
+	curCityIndexKey := ""    //city
+	curComplexIndexKey := "" //complex
 	for scanner.Scan() {
 		scanned := scanner.Text()
 		columns := strings.Split(scanned, "\",")
@@ -130,23 +136,49 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 			YearBuilt:     yearBuilt,
 			Road:          decode(road),
 		}
-		if curIndex != decode(city[0]) {
-			if v, ok := index[curIndex]; ok {
-				index[curIndex] = Index{v.start, i, v.childs}
+		// TODO : fix bug
+		if curComplexIndexKey != decode(complex) {
+			//log.Printf("complex key different[%s], [%s]", curComplexIndexKey, complex)
+			provElement, provOk := index[curProvIndexKey]
+			cityElement, cityOk := provElement.cities[curCityIndexKey]
+			complexElement, complexOk := cityElement.complexes[curComplexIndexKey]
+			if complexOk {
+				//log.Printf("complexOk[%s]", curComplexIndexKey)
+				complexElement.end = i
+				cityElement.complexes[curComplexIndexKey] = complexElement
 			}
-			//log.Printf("curIndex: %s", curIndex)
-			curIndex = decode(city[0])
-			cindex := make(map[string]ChildIndex)
-			index[curIndex] = Index{i, -1, cindex}
-			curChildIndex = ""
-		}
-		if curChildIndex != decode(city[1]) {
-			parent := index[curIndex]
-			if v, ok := parent.childs[curChildIndex]; ok {
-				parent.childs[curChildIndex] = ChildIndex{v.start, i}
+			curComplexIndexKey = decode(complex)
+			newComplexIndex := ComplexIndex{i, -1}
+
+			if curCityIndexKey != decode(city[1]) {
+				if cityOk {
+					//log.Printf("cityOk[%s]", curCityIndexKey)
+					cityElement.end = i
+					provElement.cities[curCityIndexKey] = cityElement
+				}
+				curCityIndexKey = decode(city[1])
+				newCityIndex := CityIndex{
+					i, -1,
+					map[string]ComplexIndex{
+						curComplexIndexKey: newComplexIndex},
+				}
+				if curProvIndexKey != decode(city[0]) {
+					if provOk {
+						//log.Printf("provOk[%s]", curProvIndexKey)
+						provElement.end = i
+						index[curProvIndexKey] = provElement
+					}
+					curProvIndexKey = decode(city[0])
+					index[curProvIndexKey] = ProvinceIndex{i, -1,
+						map[string]CityIndex{
+							curCityIndexKey: newCityIndex},
+					}
+				} else { // curProvIndexKey is kept on
+					provElement.cities[curCityIndexKey] = newCityIndex
+				}
+			} else { // curCityIndexKey is kept on
+				cityElement.complexes[curComplexIndexKey] = newComplexIndex
 			}
-			curChildIndex = decode(city[1])
-			parent.childs[curChildIndex] = ChildIndex{i, -1}
 		}
 		i++
 
@@ -157,11 +189,32 @@ func ImportRows(csvfile string) ([]Deal, map[string]Index, error) {
 	return rows, index, nil
 }
 
+func HandleComplex(w http.ResponseWriter, r *http.Request) {
+	vars := mux.Vars(r)
+	index := atoi(vars["city"])
+	row := gRows[index]
+	city, gu := row.City, row.Gu
+	complexesIndex := IndexProvince[city].cities[gu].complexes
+	res := ResponseTypeAll{make([]ResponseTypeUnit, len(complexesIndex))}
+	i := 0
+	for complex, v := range complexesIndex {
+		res.Result[i] = ResponseTypeUnit{complex, v.start}
+		i++
+	}
+	b, err := json.Marshal(res)
+	if err != nil {
+		log.Println(err)
+	}
+	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
+	fmt.Fprintf(w, "%s\n", b)
+}
+
 func HandleCity(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	provinceIndex := atoi(vars["province"])
 	province := gRows[provinceIndex].City
-	citiesIndex := IndexProvince[province].childs
+	citiesIndex := IndexProvince[province].cities
 	res := ResponseTypeAll{make([]ResponseTypeUnit, len(citiesIndex))}
 	i := 0
 	for city, v := range citiesIndex {
@@ -174,6 +227,7 @@ func HandleCity(w http.ResponseWriter, r *http.Request) {
 		log.Println(err)
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, "%s\n", b)
 }
 
@@ -193,21 +247,24 @@ func HandleProvince(w http.ResponseWriter, r *http.Request) {
 	}
 	log.Printf("%s", string(b))
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, "%s\n", string(b))
 }
 
 func HandleDeals(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
-	city := atoi(vars["city"])
-	row := gRows[city]
+	key := atoi(vars["complex"])
+	row := gRows[key]
 	indexProvince := IndexProvince[row.City]
-	indexCity := indexProvince.childs[row.Gu]
+	indexCity := indexProvince.cities[row.Gu]
+	indexComplex := indexCity.complexes[row.Complex]
 
-	b, err := json.Marshal(gRows[indexCity.start:indexCity.end])
+	b, err := json.Marshal(gRows[indexComplex.start:indexComplex.end])
 	if err != nil {
 		log.Panicln(err)
 	}
 	w.Header().Set("Access-Control-Allow-Origin", "*")
+	w.Header().Set("Content-Type", "application/json")
 	fmt.Fprintf(w, "%s", b)
 }
 
@@ -228,7 +285,8 @@ func main() {
 	r := mux.NewRouter()
 	r.HandleFunc("/provinces", HandleProvince)
 	r.HandleFunc("/cities/{province:[0-9]+}", HandleCity)
-	r.HandleFunc("/deals/{city:[0-9]+}", HandleDeals)
+	r.HandleFunc("/complexes/{city:[0-9]+}", HandleComplex)
+	r.HandleFunc("/deals/{complex:[0-9]+}", HandleDeals)
 	r.HandleFunc("/deal/{id:[0-9]+}/$", HandlePrice)
 	http.Handle("/", r)
 	log.Fatal(http.ListenAndServe(":8080", nil))
