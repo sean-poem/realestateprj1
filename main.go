@@ -59,6 +59,17 @@ type ResponseTypeAll struct {
 	Result []ResponseTypeUnit `json:"result"`
 }
 
+type ResponseTypeComplex struct {
+	Result []ResponseComplexTypeUnit `json:"result"`
+}
+type ResponseComplexTypeUnit struct {
+	Name string `json:"title"`
+	Key  int    `json:"key"`
+	City string `json:"province"`
+	Gu   string `json:"gu"`
+	Road string `json:"road"`
+}
+
 func unquote(val string) string {
 	str := strings.Trim(val, "\"")
 
@@ -193,12 +204,16 @@ func HandleComplex(w http.ResponseWriter, r *http.Request) {
 	vars := mux.Vars(r)
 	index := atoi(vars["city"])
 	row := gRows[index]
-	city, gu := row.City, row.Gu
+	city, gu, road := row.City, row.Gu, row.Road
 	complexesIndex := IndexProvince[city].cities[gu].complexes
-	res := ResponseTypeAll{make([]ResponseTypeUnit, len(complexesIndex))}
+	res := ResponseTypeComplex{make([]ResponseComplexTypeUnit, len(complexesIndex))}
 	i := 0
 	for complex, v := range complexesIndex {
-		res.Result[i] = ResponseTypeUnit{complex, v.start}
+		res.Result[i] = ResponseComplexTypeUnit{
+			complex,
+			v.start,
+			city, gu, road,
+		}
 		i++
 	}
 	b, err := json.Marshal(res)
